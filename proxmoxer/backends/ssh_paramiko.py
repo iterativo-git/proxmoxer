@@ -56,9 +56,10 @@ class ProxmoxParamikoSession(ProxmoxBaseSSHSession):
             cmd = 'sudo ' + cmd
         session = self.ssh_client.get_transport().open_session()
         session.exec_command(cmd)
-        stdout = session.makefile('rb', -1).read().decode()
-        stderr = session.makefile_stderr('rb', -1).read().decode()
-        return stdout, stderr
+        error_code = session.recv_exit_status()
+        stdout = ''.join(session.makefile('r', -1))
+        stderr = ''.join(session.makefile_stderr('r', -1))
+        return stdout, stderr, error_code
 
     def upload_file_obj(self, file_obj, remote_path):
         sftp = self.ssh_client.open_sftp()

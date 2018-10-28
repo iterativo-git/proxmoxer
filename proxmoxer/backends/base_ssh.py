@@ -9,10 +9,11 @@ import re
 
 
 class Response(object):
-    def __init__(self, content, status_code):
+    def __init__(self, content, status_code, reason):
         self.status_code = status_code
         self.content = content
         self.headers = {"content-type": "application/json"}
+        self.reason = reason
 
 
 class ProxmoxBaseSSHSession(object):
@@ -40,19 +41,20 @@ class ProxmoxBaseSSHSession(object):
             data['filename'] = data['filename'].name
             data['tmpfilename'] = tmp_filename
 
-        translated_data = ' '.join(["-{0} {1}".format(k, v) for k, v in chain(data.items(), params.items())])
-        full_cmd = 'pvesh {0}'.format(' '.join(filter(None, (cmd, url, translated_data))))
+        translated_data = ' '.join(["-{0} {1}".format(k, v if not isinstance(v, str) or " " not in v else '"{}"'.format(v)) for k, v in chain(data.items(), params.items())])
+        full_cmd = 'pvesh {0} --output-format json-pretty'.format(' '.join(filter(None, (cmd, url, translated_data))))
 
-        stdout, stderr = self._exec(full_cmd)
+        stdout, stderr, error_code = self._exec(full_cmd)
         match = lambda s: re.match('\d\d\d [a-zA-Z]', s)
         # sometimes contains extra text like 'trying to acquire lock...OK'
-        status_code = next(
-            (int(s.split()[0]) for s in stderr.splitlines() if match(s)),
-            500)
-        if stdout:
-            return Response(stdout, status_code)
+
+        if (error_code == 0):
+            status_code=200
         else:
-            return Response(stderr, status_code)
+            status_code = next(
+                (int(s.split()[0]) for s in stderr.splitlines() if match(s)),
+                500)
+        return Response(stdout, status_code, stderr)
 
     def upload_file_obj(self, file_obj, remote_path):
         raise NotImplementedError()
